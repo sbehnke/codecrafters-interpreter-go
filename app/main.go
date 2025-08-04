@@ -9,6 +9,8 @@ import (
 const (
 	LeftParen uint = iota
 	RightParen
+	LeftBrace
+	RightBrace
 	EOF
 )
 
@@ -33,6 +35,10 @@ func tokenTypeToString(tokenType uint) string {
 		return "LEFT_PAREN"
 	case RightParen:
 		return "RIGHT_PAREN"
+	case LeftBrace:
+		return "LEFT_BRACE"
+	case RightBrace:
+		return "RIGHT_BRACE"
 	case EOF:
 		return "EOF"
 	default:
@@ -70,9 +76,13 @@ func main() {
 		for _, c := range fileContents {
 			switch c {
 			case '(':
-				tokens = append(tokens, Token{TokenType: LeftParen, Token: "(", TokenData: ""})
+				tokens = append(tokens, Token{TokenType: LeftParen, Token: string(c), TokenData: ""})
 			case ')':
-				tokens = append(tokens, Token{TokenType: RightParen, Token: ")", TokenData: ""})
+				tokens = append(tokens, Token{TokenType: RightParen, Token: string(c), TokenData: ""})
+			case '{':
+				tokens = append(tokens, Token{TokenType: LeftBrace, Token: string(c), TokenData: ""})
+			case '}':
+				tokens = append(tokens, Token{TokenType: RightBrace, Token: string(c), TokenData: ""})
 			}
 		}
 		tokens = append(tokens, Token{TokenType: EOF, Token: "", TokenData: ""})
