@@ -7,6 +7,10 @@ import (
 )
 
 const (
+	LexicalError = 65
+)
+
+const (
 	LeftParen uint = iota
 	RightParen
 	LeftBrace
@@ -24,13 +28,19 @@ const (
 type Token struct {
 	TokenType uint
 	Token     string
-	TokenData string
+	TokenData *string
+}
+
+func StrPtr(s string) *string {
+	return &s
 }
 
 func (t Token) String() string {
-	tokenData := t.TokenData
-	if len(t.TokenData) == 0 {
+	var tokenData string
+	if t.TokenData == nil {
 		tokenData = "null"
+	} else {
+		tokenData = *t.TokenData
 	}
 	values := []string{tokenTypeToString(t.TokenType), t.Token, tokenData}
 	return strings.Join(values, " ")
@@ -92,40 +102,52 @@ func main() {
 		os.Exit(1)
 	}
 
+	hasLexicalErrors := false
 	tokens := make([]Token, 0)
 	if len(fileContents) > 0 {
+		line := 1
+
 		for _, c := range fileContents {
 			switch c {
 			case '(':
-				tokens = append(tokens, Token{TokenType: LeftParen, Token: string(c), TokenData: ""})
+				tokens = append(tokens, Token{TokenType: LeftParen, Token: string(c), TokenData: nil})
 			case ')':
-				tokens = append(tokens, Token{TokenType: RightParen, Token: string(c), TokenData: ""})
+				tokens = append(tokens, Token{TokenType: RightParen, Token: string(c), TokenData: nil})
 			case '{':
-				tokens = append(tokens, Token{TokenType: LeftBrace, Token: string(c), TokenData: ""})
+				tokens = append(tokens, Token{TokenType: LeftBrace, Token: string(c), TokenData: nil})
 			case '}':
-				tokens = append(tokens, Token{TokenType: RightBrace, Token: string(c), TokenData: ""})
+				tokens = append(tokens, Token{TokenType: RightBrace, Token: string(c), TokenData: nil})
 			case '*':
-				tokens = append(tokens, Token{TokenType: Star, Token: string(c), TokenData: ""})
+				tokens = append(tokens, Token{TokenType: Star, Token: string(c), TokenData: nil})
 			case '.':
-				tokens = append(tokens, Token{TokenType: Dot, Token: string(c), TokenData: ""})
+				tokens = append(tokens, Token{TokenType: Dot, Token: string(c), TokenData: nil})
 			case ',':
-				tokens = append(tokens, Token{TokenType: Comma, Token: string(c), TokenData: ""})
+				tokens = append(tokens, Token{TokenType: Comma, Token: string(c), TokenData: nil})
 			case '+':
-				tokens = append(tokens, Token{TokenType: Plus, Token: string(c), TokenData: ""})
+				tokens = append(tokens, Token{TokenType: Plus, Token: string(c), TokenData: nil})
 			case '-':
-				tokens = append(tokens, Token{TokenType: Minus, Token: string(c), TokenData: ""})
+				tokens = append(tokens, Token{TokenType: Minus, Token: string(c), TokenData: nil})
 			case '/':
-				tokens = append(tokens, Token{TokenType: Slash, Token: string(c), TokenData: ""})
+				tokens = append(tokens, Token{TokenType: Slash, Token: string(c), TokenData: nil})
 			case ';':
-				tokens = append(tokens, Token{TokenType: Semicolon, Token: string(c), TokenData: ""})
+				tokens = append(tokens, Token{TokenType: Semicolon, Token: string(c), TokenData: nil})
+			case '\n':
+				line += 1
+			default:
+				fmt.Fprintf(os.Stderr, "[line %d] Error: Unexpected character: %s\n", line, string(c))
+				hasLexicalErrors = true
 			}
 		}
-		tokens = append(tokens, Token{TokenType: EOF, Token: "", TokenData: ""})
+		tokens = append(tokens, Token{TokenType: EOF, Token: "", TokenData: nil})
 
 		for _, t := range tokens {
 			fmt.Println(t.String())
 		}
 	} else {
 		fmt.Println("EOF  null") // Placeholder, replace this line when implementing the scanner
+	}
+
+	if hasLexicalErrors {
+		os.Exit(LexicalError)
 	}
 }
