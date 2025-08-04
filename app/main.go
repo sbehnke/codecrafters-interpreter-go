@@ -11,6 +11,13 @@ const (
 	RightParen
 	LeftBrace
 	RightBrace
+	Star
+	Dot
+	Comma
+	Plus
+	Minus
+	Slash
+	Semicolon
 	EOF
 )
 
@@ -39,6 +46,20 @@ func tokenTypeToString(tokenType uint) string {
 		return "LEFT_BRACE"
 	case RightBrace:
 		return "RIGHT_BRACE"
+	case Star:
+		return "STAR"
+	case Dot:
+		return "DOT"
+	case Comma:
+		return "COMMA"
+	case Plus:
+		return "PLUS"
+	case Minus:
+		return "MINUS"
+	case Slash:
+		return "SLASH"
+	case Semicolon:
+		return "SEMICOLON"
 	case EOF:
 		return "EOF"
 	default:
@@ -83,6 +104,20 @@ func main() {
 				tokens = append(tokens, Token{TokenType: LeftBrace, Token: string(c), TokenData: ""})
 			case '}':
 				tokens = append(tokens, Token{TokenType: RightBrace, Token: string(c), TokenData: ""})
+			case '*':
+				tokens = append(tokens, Token{TokenType: Star, Token: string(c), TokenData: ""})
+			case '.':
+				tokens = append(tokens, Token{TokenType: Dot, Token: string(c), TokenData: ""})
+			case ',':
+				tokens = append(tokens, Token{TokenType: Comma, Token: string(c), TokenData: ""})
+			case '+':
+				tokens = append(tokens, Token{TokenType: Plus, Token: string(c), TokenData: ""})
+			case '-':
+				tokens = append(tokens, Token{TokenType: Minus, Token: string(c), TokenData: ""})
+			case '/':
+				tokens = append(tokens, Token{TokenType: Slash, Token: string(c), TokenData: ""})
+			case ';':
+				tokens = append(tokens, Token{TokenType: Semicolon, Token: string(c), TokenData: ""})
 			}
 		}
 		tokens = append(tokens, Token{TokenType: EOF, Token: "", TokenData: ""})
