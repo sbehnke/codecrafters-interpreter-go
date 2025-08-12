@@ -13,8 +13,11 @@ const (
 	LexicalError = 65
 )
 
+type TokenType uint
+
 const (
-	LeftParen uint = iota
+	// Single-character tokens
+	LeftParen TokenType = iota
 	RightParen
 	LeftBrace
 	RightBrace
@@ -25,8 +28,8 @@ const (
 	Minus
 	Slash
 	Semicolon
-	Assignment
 
+	// One or two character tokens
 	Bang
 	BangEqual
 	Equal
@@ -36,11 +39,12 @@ const (
 	Greater
 	GreaterEqual
 
+	// Literals
 	String
 	Number
-
 	Identifier
 
+	// Keywords
 	And
 	Class
 	Else
@@ -58,11 +62,12 @@ const (
 	Var
 	While
 
+	// Special
 	EOF
 )
 
 type Token struct {
-	TokenType uint
+	TokenType TokenType
 	Token     string
 	TokenData *string
 }
@@ -75,7 +80,7 @@ type Parser struct {
 	HasLexicalErrors bool
 	Source           []byte
 	Tokens           []Token
-	keywords         map[string]uint
+	keywords         map[string]TokenType
 }
 
 func NewParser(source []byte) *Parser {
@@ -87,7 +92,7 @@ func NewParser(source []byte) *Parser {
 		line:             1,
 		HasLexicalErrors: false,
 		Tokens:           make([]Token, 0),
-		keywords: map[string]uint{
+		keywords: map[string]TokenType{
 			"and":    And,
 			"class":  Class,
 			"else":   Else,
@@ -210,7 +215,7 @@ func (p *Parser) LexIdentifer() (Token, error) {
 				tokenType = Identifier
 			}
 
-			return Token{TokenType: tokenType, Token: token, TokenData: nil}, nil
+			return Token{TokenType: tokenType, Token: token}, nil
 		}
 	}
 }
@@ -223,53 +228,53 @@ func (p *Parser) Tokenize() {
 		for {
 			switch c {
 			case '(':
-				p.Tokens = append(p.Tokens, Token{TokenType: LeftParen, Token: string(c), TokenData: nil})
+				p.Tokens = append(p.Tokens, Token{TokenType: LeftParen, Token: string(c)})
 			case ')':
-				p.Tokens = append(p.Tokens, Token{TokenType: RightParen, Token: string(c), TokenData: nil})
+				p.Tokens = append(p.Tokens, Token{TokenType: RightParen, Token: string(c)})
 			case '{':
-				p.Tokens = append(p.Tokens, Token{TokenType: LeftBrace, Token: string(c), TokenData: nil})
+				p.Tokens = append(p.Tokens, Token{TokenType: LeftBrace, Token: string(c)})
 			case '}':
-				p.Tokens = append(p.Tokens, Token{TokenType: RightBrace, Token: string(c), TokenData: nil})
+				p.Tokens = append(p.Tokens, Token{TokenType: RightBrace, Token: string(c)})
 			case '*':
-				p.Tokens = append(p.Tokens, Token{TokenType: Star, Token: string(c), TokenData: nil})
+				p.Tokens = append(p.Tokens, Token{TokenType: Star, Token: string(c)})
 			case '.':
-				p.Tokens = append(p.Tokens, Token{TokenType: Dot, Token: string(c), TokenData: nil})
+				p.Tokens = append(p.Tokens, Token{TokenType: Dot, Token: string(c)})
 			case ',':
-				p.Tokens = append(p.Tokens, Token{TokenType: Comma, Token: string(c), TokenData: nil})
+				p.Tokens = append(p.Tokens, Token{TokenType: Comma, Token: string(c)})
 			case '+':
-				p.Tokens = append(p.Tokens, Token{TokenType: Plus, Token: string(c), TokenData: nil})
+				p.Tokens = append(p.Tokens, Token{TokenType: Plus, Token: string(c)})
 			case '-':
-				p.Tokens = append(p.Tokens, Token{TokenType: Minus, Token: string(c), TokenData: nil})
+				p.Tokens = append(p.Tokens, Token{TokenType: Minus, Token: string(c)})
 			case ';':
-				p.Tokens = append(p.Tokens, Token{TokenType: Semicolon, Token: string(c), TokenData: nil})
+				p.Tokens = append(p.Tokens, Token{TokenType: Semicolon, Token: string(c)})
 
 			case '!':
 				if p.Match('=') {
-					p.Tokens = append(p.Tokens, Token{TokenType: BangEqual, Token: "!=", TokenData: nil})
+					p.Tokens = append(p.Tokens, Token{TokenType: BangEqual, Token: "!="})
 					p.Next()
 				} else {
-					p.Tokens = append(p.Tokens, Token{TokenType: Bang, Token: string(c), TokenData: nil})
+					p.Tokens = append(p.Tokens, Token{TokenType: Bang, Token: string(c)})
 				}
 			case '=':
 				if p.Match('=') {
-					p.Tokens = append(p.Tokens, Token{TokenType: EqualEqual, Token: "==", TokenData: nil})
+					p.Tokens = append(p.Tokens, Token{TokenType: EqualEqual, Token: "=="})
 					p.Next()
 				} else {
-					p.Tokens = append(p.Tokens, Token{TokenType: Equal, Token: string(c), TokenData: nil})
+					p.Tokens = append(p.Tokens, Token{TokenType: Equal, Token: string(c)})
 				}
 			case '>':
 				if p.Match('=') {
-					p.Tokens = append(p.Tokens, Token{TokenType: GreaterEqual, Token: ">=", TokenData: nil})
+					p.Tokens = append(p.Tokens, Token{TokenType: GreaterEqual, Token: ">="})
 					p.Next()
 				} else {
-					p.Tokens = append(p.Tokens, Token{TokenType: Greater, Token: string(c), TokenData: nil})
+					p.Tokens = append(p.Tokens, Token{TokenType: Greater, Token: string(c)})
 				}
 			case '<':
 				if p.Match('=') {
-					p.Tokens = append(p.Tokens, Token{TokenType: LessEqual, Token: "<=", TokenData: nil})
+					p.Tokens = append(p.Tokens, Token{TokenType: LessEqual, Token: "<="})
 					p.Next()
 				} else {
-					p.Tokens = append(p.Tokens, Token{TokenType: Less, Token: string(c), TokenData: nil})
+					p.Tokens = append(p.Tokens, Token{TokenType: Less, Token: string(c)})
 				}
 
 			case '/':
@@ -283,7 +288,7 @@ func (p *Parser) Tokenize() {
 						}
 					}
 				} else {
-					p.Tokens = append(p.Tokens, Token{TokenType: Slash, Token: string(c), TokenData: nil})
+					p.Tokens = append(p.Tokens, Token{TokenType: Slash, Token: string(c)})
 				}
 
 			case '"':
@@ -327,7 +332,7 @@ func (p *Parser) Tokenize() {
 			}
 		}
 	}
-	p.Tokens = append(p.Tokens, Token{TokenType: EOF, Token: "", TokenData: nil})
+	p.Tokens = append(p.Tokens, Token{TokenType: EOF, Token: ""})
 }
 
 func StrPtr(s string) *string {
@@ -341,12 +346,24 @@ func (t Token) String() string {
 	} else {
 		tokenData = *t.TokenData
 	}
-	values := []string{tokenTypeToString(t.TokenType), t.Token, tokenData}
+	values := []string{t.TokenType.String(), t.Token, tokenData}
 	return strings.Join(values, " ")
 }
 
-func tokenTypeToString(tokenType uint) string {
-	switch tokenType {
+func (t TokenType) IsKeyword() bool {
+	return t >= And && t <= While
+}
+
+func (t TokenType) IsLiteral() bool {
+	return t == String || t == Number || t == Identifier
+}
+
+func (t TokenType) IsOperator() bool {
+	return (t >= Star && t <= Slash) || (t >= Bang && t <= GreaterEqual)
+}
+
+func (t TokenType) String() string {
+	switch t {
 	case LeftParen:
 		return "LEFT_PAREN"
 	case RightParen:
