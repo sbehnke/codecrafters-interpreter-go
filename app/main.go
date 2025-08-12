@@ -2,8 +2,11 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
+	"strconv"
 	"strings"
+	"unicode"
 )
 
 const (
@@ -34,6 +37,7 @@ const (
 	GreaterEqual
 
 	String
+	Number
 
 	EOF
 )
@@ -109,6 +113,50 @@ func (p Parser) PrintTokens() {
 	}
 }
 
+func (p *Parser) LexString() (Token, error) {
+	start := p.Idx0
+	for {
+		peek := p.Peek()
+		switch peek {
+		case '"':
+			p.Next()
+			stop := p.Idx1
+			token := string(p.Source[start:stop])
+			value := string(p.Source[start+1 : stop-1])
+			return Token{TokenType: String, Token: token, TokenData: StrPtr(value)}, nil
+		case 0:
+			p.HasLexicalErrors = true
+			return Token{}, fmt.Errorf("[line %d] Error: Unterminated string", p.line)
+		}
+		p.Next()
+	}
+}
+
+func (p *Parser) LexNumber() (Token, error) {
+	start := p.Idx0
+	for {
+		peek := p.Peek()
+		if unicode.IsNumber(rune(peek)) || peek == '.' {
+			p.Next()
+		} else {
+			stop := p.Idx1
+			token := string(p.Source[start:stop])
+			value, err := strconv.ParseFloat(token, 64)
+			if err != nil {
+				p.HasLexicalErrors = true
+				return Token{}, fmt.Errorf("[line %d] Error: Invalid number", p.line)
+			}
+			var f string
+			if value == math.Trunc(value) {
+				f = strconv.FormatFloat(value, 'f', 1, 64)
+			} else {
+				f = strconv.FormatFloat(value, 'g', -1, 64)
+			}
+			return Token{TokenType: Number, Token: token, TokenData: StrPtr(f)}, nil
+		}
+	}
+}
+
 func (p *Parser) Tokenize() {
 	p.line = 1
 	c := p.Chr0()
@@ -181,22 +229,11 @@ func (p *Parser) Tokenize() {
 				}
 
 			case '"':
-				start := p.Idx0
-				for {
-					peek := p.Peek()
-					if peek == '"' {
-						p.Next()
-						stop := p.Idx1
-						token := string(p.Source[start:stop])
-						value := string(p.Source[start+1 : stop-1])
-						p.Tokens = append(p.Tokens, Token{TokenType: String, Token: token, TokenData: StrPtr(value)})
-						break
-					} else if peek == 0 {
-						fmt.Fprintf(os.Stderr, "[line %d] Error: Unterminated string.\n", p.line)
-						p.HasLexicalErrors = true
-						break
-					}
-					p.Next()
+				token, err := p.LexString()
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "%v.\n", err)
+				} else {
+					p.Tokens = append(p.Tokens, token)
 				}
 
 			case ' ':
@@ -210,8 +247,18 @@ func (p *Parser) Tokenize() {
 				p.line += 1
 
 			default:
-				fmt.Fprintf(os.Stderr, "[line %d] Error: Unexpected character: %s\n", p.line, string(c))
-				p.HasLexicalErrors = true
+				if unicode.IsDigit(rune(c)) {
+					token, err := p.LexNumber()
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "%v.\n", err)
+					} else {
+						p.Tokens = append(p.Tokens, token)
+					}
+				} else if unicode.IsLetter(rune(c)) {
+				} else {
+					fmt.Fprintf(os.Stderr, "[line %d] Error: Unexpected character: %s\n", p.line, string(c))
+					p.HasLexicalErrors = true
+				}
 			}
 
 			c = p.Next()
@@ -280,6 +327,8 @@ func tokenTypeToString(tokenType uint) string {
 		return "GREATER_EQUAL"
 	case String:
 		return "STRING"
+	case Number:
+		return "NUMBER"
 	case EOF:
 		return "EOF"
 	default:
