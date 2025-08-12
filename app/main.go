@@ -70,25 +70,25 @@ type Token struct {
 	TokenType TokenType
 	Token     string
 	TokenData *string
+	Line      int
 }
 
-type Parser struct {
-	Idx0             int
-	Idx1             int
-	peek             int
+type Lexer struct {
+	idx0             int
+	idx1             int
 	line             int
+	column           int
 	HasLexicalErrors bool
 	Source           []byte
 	Tokens           []Token
 	keywords         map[string]TokenType
 }
 
-func NewParser(source []byte) *Parser {
-	return &Parser{
+func NewLexer(source []byte) *Lexer {
+	return &Lexer{
 		Source:           source,
-		Idx0:             0,
-		Idx1:             1,
-		peek:             0,
+		idx0:             0,
+		idx1:             1,
 		line:             1,
 		HasLexicalErrors: false,
 		Tokens:           make([]Token, 0),
@@ -113,81 +113,91 @@ func NewParser(source []byte) *Parser {
 	}
 }
 
-func (p Parser) Chr0() byte {
-	if len(p.Source) > p.Idx0 {
-		return p.Source[p.Idx0]
+func (p Lexer) chr0() byte {
+	if len(p.Source) > p.idx0 {
+		return p.Source[p.idx0]
 	}
 	return 0
 }
 
-func (p Parser) Chr1() byte {
-	if len(p.Source) > p.Idx1 {
-		return p.Source[p.Idx1]
+func (p Lexer) chr1() byte {
+	if len(p.Source) > p.idx1 {
+		return p.Source[p.idx1]
 	}
 	return 0
 }
 
-func (p *Parser) Peek() byte {
-	p.peek += 1
-	if p.peek < len(p.Source) {
-		return p.Source[p.peek]
+func (p *Lexer) peek() byte {
+	if p.idx1 < len(p.Source) {
+		return p.Source[p.idx1]
 	}
-
 	return 0
 }
 
-func (p Parser) Match(c byte) bool {
-	return p.Chr1() == c
-}
-
-func (p *Parser) Next() byte {
-	if p.Idx0 < len(p.Source) {
-		p.Idx0 += 1
-		p.Idx1 += 1
-		p.peek = p.Idx0
+func (p *Lexer) peekN(n int) byte {
+	idx := p.idx0 + n
+	if idx < len(p.Source) {
+		return p.Source[idx]
 	}
-
-	return p.Chr0()
+	return 0
 }
 
-func (p Parser) PrintTokens() {
+func (p Lexer) match(c byte) bool {
+	return p.chr1() == c
+}
+
+func (p *Lexer) next() byte {
+	if p.idx0 < len(p.Source) {
+		if p.chr0() == '\n' {
+			p.line++
+			p.column = 0
+		} else {
+			p.column++
+		}
+		p.idx0++
+		p.idx1++
+	}
+	return p.chr0()
+}
+
+func (p Lexer) PrintTokens() {
 	for _, t := range p.Tokens {
 		fmt.Println(t.String())
 	}
 }
 
-func (p *Parser) LexString() (Token, error) {
-	start := p.Idx0
+func (p *Lexer) lexString() (Token, error) {
+	start := p.idx0
 	for {
-		peek := p.Peek()
+		peek := p.peek()
 		switch peek {
 		case '"':
-			p.Next()
-			stop := p.Idx1
+			p.next()
+			stop := p.idx1
 			token := string(p.Source[start:stop])
 			value := string(p.Source[start+1 : stop-1])
-			return Token{TokenType: String, Token: token, TokenData: StrPtr(value)}, nil
+			return Token{TokenType: String, Token: token, TokenData: StrPtr(value), Line: p.line}, nil
 		case 0:
 			p.HasLexicalErrors = true
-			return Token{}, fmt.Errorf("[line %d] Error: Unterminated string", p.line)
+			return Token{Line: p.line}, fmt.Errorf("[line %d] Error: Unterminated string", p.line)
 		}
-		p.Next()
+		p.next()
 	}
 }
 
-func (p *Parser) LexNumber() (Token, error) {
-	start := p.Idx0
+func (p *Lexer) lexNumber() (Token, error) {
+	start := p.idx0
 	for {
-		peek := p.Peek()
+		peek := p.peek()
 		if unicode.IsNumber(rune(peek)) || peek == '.' {
-			p.Next()
+			p.next()
 		} else {
-			stop := p.Idx1
+			stop := p.idx1
 			token := string(p.Source[start:stop])
 			value, err := strconv.ParseFloat(token, 64)
 			if err != nil {
 				p.HasLexicalErrors = true
-				return Token{}, fmt.Errorf("[line %d] Error: Invalid number", p.line)
+				return Token{Line: p.line}, fmt.Errorf("[line %d] Error: Invalid number", p.line)
 			}
 			var f string
 			if value == math.Trunc(value) {
@@ -195,19 +205,19 @@ func (p *Parser) LexNumber() (Token, error) {
 			} else {
 				f = strconv.FormatFloat(value, 'g', -1, 64)
 			}
-			return Token{TokenType: Number, Token: token, TokenData: StrPtr(f)}, nil
+			return Token{TokenType: Number, Token: token, TokenData: StrPtr(f), Line: p.line}, nil
 		}
 	}
 }
 
-func (p *Parser) LexIdentifer() (Token, error) {
-	start := p.Idx0
+func (p *Lexer) lexIdentifer() Token {
+	start := p.idx0
 	for {
-		peek := p.Peek()
+		peek := p.peek()
 		if unicode.IsLetter(rune(peek)) || unicode.IsNumber(rune(peek)) || peek == '_' {
-			p.Next()
+			p.next()
 		} else {
-			stop := p.Idx1
+			stop := p.idx1
 			token := string(p.Source[start:stop])
 
 			tokenType, ok := p.keywords[token]
@@ -215,124 +225,138 @@ func (p *Parser) LexIdentifer() (Token, error) {
 				tokenType = Identifier
 			}
 
-			return Token{TokenType: tokenType, Token: token}, nil
+			return Token{TokenType: tokenType, Token: token, Line: p.line}
 		}
 	}
 }
 
-func (p *Parser) Tokenize() {
+func (p *Lexer) addToken(tokenType TokenType) {
+	p.Tokens = append(p.Tokens, Token{
+		TokenType: tokenType,
+		Token:     string(p.Source[p.idx0:p.idx1]),
+		Line:      p.line,
+	})
+}
+
+func (p *Lexer) addTokenWithLiteral(tokenType TokenType, literal string) {
+	p.Tokens = append(p.Tokens, Token{
+		TokenType: tokenType,
+		Token:     literal,
+		Line:      p.line,
+	})
+}
+
+func (p *Lexer) appendToken(token Token) {
+	p.Tokens = append(p.Tokens, token)
+}
+
+func (p *Lexer) Tokenize() {
 	p.line = 1
-	c := p.Chr0()
+	p.column = 0
+
+	c := p.chr0()
 
 	if c != 0 {
 		for {
 			switch c {
 			case '(':
-				p.Tokens = append(p.Tokens, Token{TokenType: LeftParen, Token: string(c)})
+				p.addToken(LeftParen)
 			case ')':
-				p.Tokens = append(p.Tokens, Token{TokenType: RightParen, Token: string(c)})
+				p.addToken(RightParen)
 			case '{':
-				p.Tokens = append(p.Tokens, Token{TokenType: LeftBrace, Token: string(c)})
+				p.addToken(LeftBrace)
 			case '}':
-				p.Tokens = append(p.Tokens, Token{TokenType: RightBrace, Token: string(c)})
+				p.addToken(RightBrace)
 			case '*':
-				p.Tokens = append(p.Tokens, Token{TokenType: Star, Token: string(c)})
+				p.addToken(Star)
 			case '.':
-				p.Tokens = append(p.Tokens, Token{TokenType: Dot, Token: string(c)})
+				p.addToken(Dot)
 			case ',':
-				p.Tokens = append(p.Tokens, Token{TokenType: Comma, Token: string(c)})
+				p.addToken(Comma)
 			case '+':
-				p.Tokens = append(p.Tokens, Token{TokenType: Plus, Token: string(c)})
+				p.addToken(Plus)
 			case '-':
-				p.Tokens = append(p.Tokens, Token{TokenType: Minus, Token: string(c)})
+				p.addToken(Minus)
 			case ';':
-				p.Tokens = append(p.Tokens, Token{TokenType: Semicolon, Token: string(c)})
+				p.addToken(Semicolon)
 
 			case '!':
-				if p.Match('=') {
-					p.Tokens = append(p.Tokens, Token{TokenType: BangEqual, Token: "!="})
-					p.Next()
+				if p.match('=') {
+					p.addTokenWithLiteral(BangEqual, "!=")
+					p.next()
 				} else {
-					p.Tokens = append(p.Tokens, Token{TokenType: Bang, Token: string(c)})
+					p.addToken(Bang)
 				}
 			case '=':
-				if p.Match('=') {
-					p.Tokens = append(p.Tokens, Token{TokenType: EqualEqual, Token: "=="})
-					p.Next()
+				if p.match('=') {
+					p.addTokenWithLiteral(EqualEqual, "==")
+					p.next()
 				} else {
-					p.Tokens = append(p.Tokens, Token{TokenType: Equal, Token: string(c)})
+					p.addToken(Equal)
 				}
 			case '>':
-				if p.Match('=') {
-					p.Tokens = append(p.Tokens, Token{TokenType: GreaterEqual, Token: ">="})
-					p.Next()
+				if p.match('=') {
+					p.addTokenWithLiteral(GreaterEqual, ">=")
+					p.next()
 				} else {
-					p.Tokens = append(p.Tokens, Token{TokenType: Greater, Token: string(c)})
+					p.addToken(Greater)
 				}
 			case '<':
-				if p.Match('=') {
-					p.Tokens = append(p.Tokens, Token{TokenType: LessEqual, Token: "<="})
-					p.Next()
+				if p.match('=') {
+					p.addTokenWithLiteral(LessEqual, "<=")
+					p.next()
 				} else {
-					p.Tokens = append(p.Tokens, Token{TokenType: Less, Token: string(c)})
+					p.addToken(Less)
 				}
 
 			case '/':
-				if p.Match('/') {
+				if p.match('/') {
 					for {
-						peek := p.Peek()
+						peek := p.peek()
 						if peek == 0 || peek == '\n' {
 							break
 						} else {
-							p.Next()
+							p.next()
 						}
 					}
 				} else {
-					p.Tokens = append(p.Tokens, Token{TokenType: Slash, Token: string(c)})
+					p.addToken(Slash)
 				}
 
 			case '"':
-				token, err := p.LexString()
+				token, err := p.lexString()
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "%v.\n", err)
 				} else {
-					p.Tokens = append(p.Tokens, token)
+					p.appendToken(token)
 				}
-
-			case ' ':
-			case '\t':
-			case '\r':
-				{
-					break
-				}
-
-			case '\n':
-				p.line += 1
 
 			default:
-				if unicode.IsDigit(rune(c)) {
-					token, err := p.LexNumber()
+				if unicode.IsSpace(rune(c)) {
+					// Nothing to do
+				} else if unicode.IsDigit(rune(c)) {
+					token, err := p.lexNumber()
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "%v.\n", err)
 					} else {
-						p.Tokens = append(p.Tokens, token)
+						p.appendToken(token)
 					}
 				} else if unicode.IsLetter(rune(c)) || c == '_' {
-					token, _ := p.LexIdentifer()
-					p.Tokens = append(p.Tokens, token)
+					token := p.lexIdentifer()
+					p.appendToken(token)
 				} else {
 					fmt.Fprintf(os.Stderr, "[line %d] Error: Unexpected character: %s\n", p.line, string(c))
 					p.HasLexicalErrors = true
 				}
 			}
 
-			c = p.Next()
+			c = p.next()
 			if c == 0 {
 				break
 			}
 		}
 	}
-	p.Tokens = append(p.Tokens, Token{TokenType: EOF, Token: ""})
+	p.addTokenWithLiteral(EOF, "")
 }
 
 func StrPtr(s string) *string {
@@ -455,12 +479,8 @@ func main() {
 
 	command := os.Args[1]
 
-	if command != "tokenize" {
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
-		os.Exit(1)
-	}
-
-	if command == "tokenize" {
+	switch command {
+	case "tokenize":
 		filename := os.Args[2]
 		fileContents, err := os.ReadFile(filename)
 		if err != nil {
@@ -468,12 +488,17 @@ func main() {
 			os.Exit(1)
 		}
 
-		parser := NewParser(fileContents)
-		parser.Tokenize()
-		parser.PrintTokens()
+		lexer := NewLexer(fileContents)
+		lexer.Tokenize()
+		lexer.PrintTokens()
 
-		if parser.HasLexicalErrors {
+		if lexer.HasLexicalErrors {
 			os.Exit(LexicalError)
 		}
+	case "parse":
+
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
+		os.Exit(1)
 	}
 }
