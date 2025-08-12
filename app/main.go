@@ -11,7 +11,7 @@ import (
 
 const (
 	LexicalError   = 65
-	SupportUnicode = false
+	SupportUnicode = true
 )
 
 type TokenType uint
@@ -220,10 +220,9 @@ func (p *Lexer) lexIdentifer() Token {
 			unicode.IsNumber(peek) ||
 			peek == '_' {
 			p.next()
-		} else if SupportUnicode && (unicode.IsLetter(peek) ||
+		} else if SupportUnicode && !unicode.IsSpace(peek) && !unicode.IsPunct(peek) && (unicode.IsLetter(peek) ||
 			unicode.IsNumber(peek) ||
 			peek == '_' ||
-			unicode.IsSymbol(peek) ||
 			unicode.IsGraphic(peek) ||
 			peek == '\u200D' || // Zero-Width Joiner
 			peek == '\uFE0F' || // Variation Selector-16 (for emoji presentation)
@@ -357,8 +356,9 @@ func (p *Lexer) Tokenize() {
 				} else if unicode.IsLetter(c) || c == '_' {
 					token := p.lexIdentifer()
 					p.appendToken(token)
-				} else if SupportUnicode && (unicode.IsLetter(c) || c == '_' || unicode.IsSymbol(c) || unicode.IsGraphic(c) ||
-					c == '\u200D' || c == '\uFE0F' || c == '\uFE0E') {
+				} else if SupportUnicode && !(c == '@' || c == '#' || c == '$' || c == '%' || c == '^' || c == '&' || c == '*') &&
+					(unicode.IsLetter(c) || c == '_' || unicode.IsGraphic(c) ||
+						c == '\u200D' || c == '\uFE0F' || c == '\uFE0E') {
 					token := p.lexIdentifer()
 					p.appendToken(token)
 				} else {
