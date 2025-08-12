@@ -78,6 +78,15 @@ func (p Parser) Chr1() byte {
 	return 0
 }
 
+func (p *Parser) Peek() byte {
+	p.peek += 1
+	if p.peek < len(p.Source) {
+		return p.Source[p.peek]
+	}
+
+	return 0
+}
+
 func (p Parser) Match(c byte) bool {
 	return p.Chr1() == c
 }
@@ -123,8 +132,6 @@ func (p *Parser) Tokenize() {
 				p.Tokens = append(p.Tokens, Token{TokenType: Plus, Token: string(c), TokenData: nil})
 			case '-':
 				p.Tokens = append(p.Tokens, Token{TokenType: Minus, Token: string(c), TokenData: nil})
-			case '/':
-				p.Tokens = append(p.Tokens, Token{TokenType: Slash, Token: string(c), TokenData: nil})
 			case ';':
 				p.Tokens = append(p.Tokens, Token{TokenType: Semicolon, Token: string(c), TokenData: nil})
 
@@ -155,6 +162,27 @@ func (p *Parser) Tokenize() {
 					p.Next()
 				} else {
 					p.Tokens = append(p.Tokens, Token{TokenType: Less, Token: string(c), TokenData: nil})
+				}
+
+			case '/':
+				if p.Match('/') {
+					for {
+						peek := p.Peek()
+						if peek == 0 || peek == '\n' {
+							break
+						} else {
+							p.Next()
+						}
+					}
+				} else {
+					p.Tokens = append(p.Tokens, Token{TokenType: Slash, Token: string(c), TokenData: nil})
+				}
+
+			case ' ':
+			case '\t':
+			case '\r':
+				{
+					break
 				}
 
 			case '\n':
