@@ -33,6 +33,8 @@ const (
 	Greater
 	GreaterEqual
 
+	String
+
 	EOF
 )
 
@@ -178,6 +180,25 @@ func (p *Parser) Tokenize() {
 					p.Tokens = append(p.Tokens, Token{TokenType: Slash, Token: string(c), TokenData: nil})
 				}
 
+			case '"':
+				start := p.Idx0
+				for {
+					peek := p.Peek()
+					if peek == '"' {
+						p.Next()
+						stop := p.Idx1
+						token := string(p.Source[start:stop])
+						value := string(p.Source[start+1 : stop-1])
+						p.Tokens = append(p.Tokens, Token{TokenType: String, Token: token, TokenData: StrPtr(value)})
+						break
+					} else if peek == 0 {
+						fmt.Fprintf(os.Stderr, "[line %d] Error: Unterminated string.\n", p.line)
+						p.HasLexicalErrors = true
+						break
+					}
+					p.Next()
+				}
+
 			case ' ':
 			case '\t':
 			case '\r':
@@ -257,6 +278,8 @@ func tokenTypeToString(tokenType uint) string {
 		return "GREATER"
 	case GreaterEqual:
 		return "GREATER_EQUAL"
+	case String:
+		return "STRING"
 	case EOF:
 		return "EOF"
 	default:
