@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	LexicalError = 65
+	LexicalError   = 65
+	SupportUnicode = false
 )
 
 type TokenType uint
@@ -79,14 +80,14 @@ type Lexer struct {
 	line             int
 	column           int
 	HasLexicalErrors bool
-	Source           []byte
+	Source           []rune
 	Tokens           []Token
 	keywords         map[string]TokenType
 }
 
-func NewLexer(source []byte) *Lexer {
+func NewLexer(source string) *Lexer {
 	return &Lexer{
-		Source:           source,
+		Source:           []rune(source),
 		idx0:             0,
 		idx1:             1,
 		line:             1,
@@ -113,28 +114,28 @@ func NewLexer(source []byte) *Lexer {
 	}
 }
 
-func (p Lexer) chr0() byte {
+func (p Lexer) chr0() rune {
 	if len(p.Source) > p.idx0 {
 		return p.Source[p.idx0]
 	}
 	return 0
 }
 
-func (p Lexer) chr1() byte {
+func (p Lexer) chr1() rune {
 	if len(p.Source) > p.idx1 {
 		return p.Source[p.idx1]
 	}
 	return 0
 }
 
-func (p *Lexer) peek() byte {
+func (p *Lexer) peek() rune {
 	if p.idx1 < len(p.Source) {
 		return p.Source[p.idx1]
 	}
 	return 0
 }
 
-func (p *Lexer) peekN(n int) byte {
+func (p *Lexer) peekN(n int) rune {
 	idx := p.idx0 + n
 	if idx < len(p.Source) {
 		return p.Source[idx]
@@ -142,11 +143,11 @@ func (p *Lexer) peekN(n int) byte {
 	return 0
 }
 
-func (p Lexer) match(c byte) bool {
+func (p Lexer) match(c rune) bool {
 	return p.chr1() == c
 }
 
-func (p *Lexer) next() byte {
+func (p *Lexer) next() rune {
 	if p.idx0 < len(p.Source) {
 		if p.chr0() == '\n' {
 			p.line++
@@ -189,7 +190,7 @@ func (p *Lexer) lexNumber() (Token, error) {
 	start := p.idx0
 	for {
 		peek := p.peek()
-		if unicode.IsNumber(rune(peek)) || peek == '.' {
+		if unicode.IsNumber(peek) || peek == '.' {
 			p.next()
 		} else {
 			stop := p.idx1
@@ -214,7 +215,19 @@ func (p *Lexer) lexIdentifer() Token {
 	start := p.idx0
 	for {
 		peek := p.peek()
-		if unicode.IsLetter(rune(peek)) || unicode.IsNumber(rune(peek)) || peek == '_' {
+		// Check for Zero-Width Joiner (U+200D) and other joining characters
+		if unicode.IsLetter(peek) ||
+			unicode.IsNumber(peek) ||
+			peek == '_' {
+			p.next()
+		} else if SupportUnicode && (unicode.IsLetter(peek) ||
+			unicode.IsNumber(peek) ||
+			peek == '_' ||
+			unicode.IsSymbol(peek) ||
+			unicode.IsGraphic(peek) ||
+			peek == '\u200D' || // Zero-Width Joiner
+			peek == '\uFE0F' || // Variation Selector-16 (for emoji presentation)
+			peek == '\uFE0E') {
 			p.next()
 		} else {
 			stop := p.idx1
@@ -332,16 +345,20 @@ func (p *Lexer) Tokenize() {
 				}
 
 			default:
-				if unicode.IsSpace(rune(c)) {
+				if unicode.IsSpace(c) {
 					// Nothing to do
-				} else if unicode.IsDigit(rune(c)) {
+				} else if unicode.IsDigit(c) {
 					token, err := p.lexNumber()
 					if err != nil {
 						fmt.Fprintf(os.Stderr, "%v.\n", err)
 					} else {
 						p.appendToken(token)
 					}
-				} else if unicode.IsLetter(rune(c)) || c == '_' {
+				} else if unicode.IsLetter(c) || c == '_' {
+					token := p.lexIdentifer()
+					p.appendToken(token)
+				} else if SupportUnicode && (unicode.IsLetter(c) || c == '_' || unicode.IsSymbol(c) || unicode.IsGraphic(c) ||
+					c == '\u200D' || c == '\uFE0F' || c == '\uFE0E') {
 					token := p.lexIdentifer()
 					p.appendToken(token)
 				} else {
@@ -488,7 +505,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		lexer := NewLexer(fileContents)
+		lexer := NewLexer(string(fileContents))
 		lexer.Tokenize()
 		lexer.PrintTokens()
 
