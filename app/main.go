@@ -39,6 +39,25 @@ const (
 	String
 	Number
 
+	Identifier
+
+	And
+	Class
+	Else
+	False
+	For
+	Fun
+	If
+	Nil
+	Or
+	Print
+	Return
+	Super
+	This
+	True
+	Var
+	While
+
 	EOF
 )
 
@@ -56,6 +75,7 @@ type Parser struct {
 	HasLexicalErrors bool
 	Source           []byte
 	Tokens           []Token
+	keywords         map[string]uint
 }
 
 func NewParser(source []byte) *Parser {
@@ -67,6 +87,24 @@ func NewParser(source []byte) *Parser {
 		line:             1,
 		HasLexicalErrors: false,
 		Tokens:           make([]Token, 0),
+		keywords: map[string]uint{
+			"and":    And,
+			"class":  Class,
+			"else":   Else,
+			"false":  False,
+			"for":    For,
+			"fun":    Fun,
+			"if":     If,
+			"nil":    Nil,
+			"or":     Or,
+			"print":  Print,
+			"return": Return,
+			"super":  Super,
+			"this":   This,
+			"true":   True,
+			"var":    Var,
+			"while":  While,
+		},
 	}
 }
 
@@ -153,6 +191,26 @@ func (p *Parser) LexNumber() (Token, error) {
 				f = strconv.FormatFloat(value, 'g', -1, 64)
 			}
 			return Token{TokenType: Number, Token: token, TokenData: StrPtr(f)}, nil
+		}
+	}
+}
+
+func (p *Parser) LexIdentifer() (Token, error) {
+	start := p.Idx0
+	for {
+		peek := p.Peek()
+		if unicode.IsLetter(rune(peek)) || unicode.IsNumber(rune(peek)) || peek == '_' {
+			p.Next()
+		} else {
+			stop := p.Idx1
+			token := string(p.Source[start:stop])
+
+			tokenType, ok := p.keywords[token]
+			if !ok {
+				tokenType = Identifier
+			}
+
+			return Token{TokenType: tokenType, Token: token, TokenData: nil}, nil
 		}
 	}
 }
@@ -254,7 +312,9 @@ func (p *Parser) Tokenize() {
 					} else {
 						p.Tokens = append(p.Tokens, token)
 					}
-				} else if unicode.IsLetter(rune(c)) {
+				} else if unicode.IsLetter(rune(c)) || c == '_' {
+					token, _ := p.LexIdentifer()
+					p.Tokens = append(p.Tokens, token)
 				} else {
 					fmt.Fprintf(os.Stderr, "[line %d] Error: Unexpected character: %s\n", p.line, string(c))
 					p.HasLexicalErrors = true
@@ -329,6 +389,40 @@ func tokenTypeToString(tokenType uint) string {
 		return "STRING"
 	case Number:
 		return "NUMBER"
+	case Identifier:
+		return "IDENTIFIER"
+	case And:
+		return "AND"
+	case Class:
+		return "CLASS"
+	case Else:
+		return "ELSE"
+	case False:
+		return "FALSE"
+	case For:
+		return "FOR"
+	case Fun:
+		return "FUN"
+	case If:
+		return "IF"
+	case Nil:
+		return "NIL"
+	case Or:
+		return "OR"
+	case Print:
+		return "PRINT"
+	case Return:
+		return "RETURN"
+	case Super:
+		return "SUPER"
+	case This:
+		return "THIS"
+	case True:
+		return "TRUE"
+	case Var:
+		return "VAR"
+	case While:
+		return "WHILE"
 	case EOF:
 		return "EOF"
 	default:
