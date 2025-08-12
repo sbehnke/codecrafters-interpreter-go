@@ -22,6 +22,17 @@ const (
 	Minus
 	Slash
 	Semicolon
+	Assignment
+
+	Bang
+	BangEqual
+	Equal
+	EqualEqual
+	Less
+	LessEqual
+	Greater
+	GreaterEqual
+
 	EOF
 )
 
@@ -29,6 +40,138 @@ type Token struct {
 	TokenType uint
 	Token     string
 	TokenData *string
+}
+
+type Parser struct {
+	Idx0             int
+	Idx1             int
+	peek             int
+	line             int
+	HasLexicalErrors bool
+	Source           []byte
+	Tokens           []Token
+}
+
+func NewParser(source []byte) *Parser {
+	return &Parser{
+		Source:           source,
+		Idx0:             0,
+		Idx1:             1,
+		peek:             0,
+		line:             1,
+		HasLexicalErrors: false,
+		Tokens:           make([]Token, 0),
+	}
+}
+
+func (p Parser) Chr0() byte {
+	if len(p.Source) > p.Idx0 {
+		return p.Source[p.Idx0]
+	}
+	return 0
+}
+
+func (p Parser) Chr1() byte {
+	if len(p.Source) > p.Idx1 {
+		return p.Source[p.Idx1]
+	}
+	return 0
+}
+
+func (p Parser) Match(c byte) bool {
+	return p.Chr1() == c
+}
+
+func (p *Parser) Next() byte {
+	if p.Idx0 < len(p.Source) {
+		p.Idx0 += 1
+		p.Idx1 += 1
+		p.peek = p.Idx0
+	}
+
+	return p.Chr0()
+}
+
+func (p Parser) PrintTokens() {
+	for _, t := range p.Tokens {
+		fmt.Println(t.String())
+	}
+}
+
+func (p *Parser) Tokenize() {
+	p.line = 1
+	c := p.Chr0()
+
+	if c != 0 {
+		for {
+			switch c {
+			case '(':
+				p.Tokens = append(p.Tokens, Token{TokenType: LeftParen, Token: string(c), TokenData: nil})
+			case ')':
+				p.Tokens = append(p.Tokens, Token{TokenType: RightParen, Token: string(c), TokenData: nil})
+			case '{':
+				p.Tokens = append(p.Tokens, Token{TokenType: LeftBrace, Token: string(c), TokenData: nil})
+			case '}':
+				p.Tokens = append(p.Tokens, Token{TokenType: RightBrace, Token: string(c), TokenData: nil})
+			case '*':
+				p.Tokens = append(p.Tokens, Token{TokenType: Star, Token: string(c), TokenData: nil})
+			case '.':
+				p.Tokens = append(p.Tokens, Token{TokenType: Dot, Token: string(c), TokenData: nil})
+			case ',':
+				p.Tokens = append(p.Tokens, Token{TokenType: Comma, Token: string(c), TokenData: nil})
+			case '+':
+				p.Tokens = append(p.Tokens, Token{TokenType: Plus, Token: string(c), TokenData: nil})
+			case '-':
+				p.Tokens = append(p.Tokens, Token{TokenType: Minus, Token: string(c), TokenData: nil})
+			case '/':
+				p.Tokens = append(p.Tokens, Token{TokenType: Slash, Token: string(c), TokenData: nil})
+			case ';':
+				p.Tokens = append(p.Tokens, Token{TokenType: Semicolon, Token: string(c), TokenData: nil})
+
+			case '!':
+				if p.Match('=') {
+					p.Tokens = append(p.Tokens, Token{TokenType: BangEqual, Token: "!=", TokenData: nil})
+					p.Next()
+				} else {
+					p.Tokens = append(p.Tokens, Token{TokenType: Bang, Token: string(c), TokenData: nil})
+				}
+			case '=':
+				if p.Match('=') {
+					p.Tokens = append(p.Tokens, Token{TokenType: EqualEqual, Token: "==", TokenData: nil})
+					p.Next()
+				} else {
+					p.Tokens = append(p.Tokens, Token{TokenType: Equal, Token: string(c), TokenData: nil})
+				}
+			case '>':
+				if p.Match('=') {
+					p.Tokens = append(p.Tokens, Token{TokenType: GreaterEqual, Token: ">=", TokenData: nil})
+					p.Next()
+				} else {
+					p.Tokens = append(p.Tokens, Token{TokenType: Greater, Token: string(c), TokenData: nil})
+				}
+			case '<':
+				if p.Match('=') {
+					p.Tokens = append(p.Tokens, Token{TokenType: LessEqual, Token: "<=", TokenData: nil})
+					p.Next()
+				} else {
+					p.Tokens = append(p.Tokens, Token{TokenType: Less, Token: string(c), TokenData: nil})
+				}
+
+			case '\n':
+				p.line += 1
+
+			default:
+				fmt.Fprintf(os.Stderr, "[line %d] Error: Unexpected character: %s\n", p.line, string(c))
+				p.HasLexicalErrors = true
+			}
+
+			c = p.Next()
+			if c == 0 {
+				break
+			}
+		}
+	}
+	p.Tokens = append(p.Tokens, Token{TokenType: EOF, Token: "", TokenData: nil})
 }
 
 func StrPtr(s string) *string {
@@ -70,6 +213,22 @@ func tokenTypeToString(tokenType uint) string {
 		return "SLASH"
 	case Semicolon:
 		return "SEMICOLON"
+	case Bang:
+		return "BANG"
+	case BangEqual:
+		return "BANG_EQUAL"
+	case Equal:
+		return "EQUAL"
+	case EqualEqual:
+		return "EQUAL_EQUAL"
+	case Less:
+		return "LESS"
+	case LessEqual:
+		return "LESS_EQUAL"
+	case Greater:
+		return "GREATER"
+	case GreaterEqual:
+		return "GREATER_EQUAL"
 	case EOF:
 		return "EOF"
 	default:
@@ -78,9 +237,6 @@ func tokenTypeToString(tokenType uint) string {
 }
 
 func main() {
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
-	fmt.Fprintln(os.Stderr, "Logs from your program will appear here!")
-
 	if len(os.Args) < 3 {
 		fmt.Fprintln(os.Stderr, "Usage: ./your_program.sh tokenize <filename>")
 		os.Exit(1)
@@ -93,61 +249,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Uncomment this block to pass the first stage
-	//
-	filename := os.Args[2]
-	fileContents, err := os.ReadFile(filename)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
-		os.Exit(1)
-	}
-
-	hasLexicalErrors := false
-	tokens := make([]Token, 0)
-	if len(fileContents) > 0 {
-		line := 1
-
-		for _, c := range fileContents {
-			switch c {
-			case '(':
-				tokens = append(tokens, Token{TokenType: LeftParen, Token: string(c), TokenData: nil})
-			case ')':
-				tokens = append(tokens, Token{TokenType: RightParen, Token: string(c), TokenData: nil})
-			case '{':
-				tokens = append(tokens, Token{TokenType: LeftBrace, Token: string(c), TokenData: nil})
-			case '}':
-				tokens = append(tokens, Token{TokenType: RightBrace, Token: string(c), TokenData: nil})
-			case '*':
-				tokens = append(tokens, Token{TokenType: Star, Token: string(c), TokenData: nil})
-			case '.':
-				tokens = append(tokens, Token{TokenType: Dot, Token: string(c), TokenData: nil})
-			case ',':
-				tokens = append(tokens, Token{TokenType: Comma, Token: string(c), TokenData: nil})
-			case '+':
-				tokens = append(tokens, Token{TokenType: Plus, Token: string(c), TokenData: nil})
-			case '-':
-				tokens = append(tokens, Token{TokenType: Minus, Token: string(c), TokenData: nil})
-			case '/':
-				tokens = append(tokens, Token{TokenType: Slash, Token: string(c), TokenData: nil})
-			case ';':
-				tokens = append(tokens, Token{TokenType: Semicolon, Token: string(c), TokenData: nil})
-			case '\n':
-				line += 1
-			default:
-				fmt.Fprintf(os.Stderr, "[line %d] Error: Unexpected character: %s\n", line, string(c))
-				hasLexicalErrors = true
-			}
+	if command == "tokenize" {
+		filename := os.Args[2]
+		fileContents, err := os.ReadFile(filename)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
+			os.Exit(1)
 		}
-		tokens = append(tokens, Token{TokenType: EOF, Token: "", TokenData: nil})
 
-		for _, t := range tokens {
-			fmt.Println(t.String())
+		parser := NewParser(fileContents)
+		parser.Tokenize()
+		parser.PrintTokens()
+
+		if parser.HasLexicalErrors {
+			os.Exit(LexicalError)
 		}
-	} else {
-		fmt.Println("EOF  null") // Placeholder, replace this line when implementing the scanner
-	}
-
-	if hasLexicalErrors {
-		os.Exit(LexicalError)
 	}
 }
